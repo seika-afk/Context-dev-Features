@@ -1,2 +1,3 @@
 .tsx-shim-*
 .env
+node_modules/

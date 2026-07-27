@@ -1,6 +1,5 @@
 import { chromium } from "playwright";
 import { OpenRouter } from '@openrouter/sdk';
-import { writeFile } from "fs/promises";
 
 import dotenv from "dotenv";
 dotenv.config();
@@ -9,12 +8,6 @@ const client = new OpenRouter({
   apiKey: process.env.key,
 });
 
-// Safety cap so a single call never blows past your OpenRouter prompt-token
-// ceiling, regardless of how bloated a page's HTML is. ~4 chars/token is a
-// rough rule of thumb, so 8000 chars ≈ 2000 tokens.
-const MAX_HTML_CHARS = 8000;
-const truncate = (s: string): string =>
-  s.length > MAX_HTML_CHARS ? s.slice(0, MAX_HTML_CHARS) + "...[truncated]" : s;
 
 const startBrowser = async () => {
   const browser = await chromium.launch({
@@ -87,10 +80,6 @@ const ask_llm = async (query: string, html_: string) => {
   return (completion.choices[0].message.content);
 };
 
-// Extract used to locate a clickable element. Captures icon-only links
-// (footer socials etc. usually have no visible text, just an aria-label
-// or title on an <a> wrapping an <svg>) and tags footer elements so
-// location-aware queries like "in the footer" can be resolved correctly.
 const extractClickables = async (page: import('playwright').Page): Promise<string> => {
   return await page.evaluate(() => {
     const selector = 'a, button, input[type=button], input[type=submit], [role="button"], [onclick]';
@@ -210,11 +199,10 @@ const run = async (url: string, nlum: string, msg: string) => {
     }
   }
 
-  const clickables = truncate(await extractClickables(page));
-  console.log("Clickable elements extracted");
+  const html_content = page.content();
 
-  const text = await ask_llm(nlum, clickables);
-  console.log("LLM returned:", text);
+  const text = await ask_llm(nlum, html_content);
+  console.log("LLM found these text:", text);
 
   if (text === "invalid") {
     throw new Error(`No matching element found for query: "${nlum}"`);
@@ -226,9 +214,6 @@ const run = async (url: string, nlum: string, msg: string) => {
 
   const before_url = page.url();
 
-  // Some links (target="_blank") open a NEW tab instead of navigating the
-  // current page. If we don't capture that new tab, `page` never changes
-  // and the state check below will always see the old page.
   const context = page.context();
   const [newPage] = await Promise.all([
     context.waitForEvent("page", { timeout: 3000 }).catch(() => null),
@@ -245,9 +230,6 @@ const run = async (url: string, nlum: string, msg: string) => {
   }
   console.log("Clicked", text);
 
-  // Sanity check: did the click actually do anything observable? If not,
-  // the LLM likely matched the wrong element and we're about to ask a
-  // question against a page that never changed.
   const navigated = newPage !== null || targetPage.url() !== before_url;
   if (!navigated) {
     console.warn(
@@ -259,7 +241,7 @@ const run = async (url: string, nlum: string, msg: string) => {
   console.log("Captured resulting page state");
   console.log(targetPage.url());
 
-  await writeFile("output.txt", changed_html, "utf-8");
+  //THIRD PART
 
   console.log("Asking about page state...");
   const result = await ask_state(changed_html, msg);
