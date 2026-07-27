@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "click": "tsx HeadLessBrowser.ts"
+  },
   "dependencies": {
     "@openrouter/sdk": "^1.0.17",
     "dotenv": "^17.4.2",

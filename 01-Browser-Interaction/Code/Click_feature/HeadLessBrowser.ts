@@ -199,7 +199,7 @@ const run = async (url: string, nlum: string, msg: string) => {
     }
   }
 
-  const html_content = page.content();
+  const html_content =  await page.content();
 
   const text = await ask_llm(nlum, html_content);
   console.log("LLM found these text:", text);
@@ -213,8 +213,8 @@ const run = async (url: string, nlum: string, msg: string) => {
   console.log("Clicking...");
 
   const before_url = page.url();
-
-  const context = page.context();
+console.log(page.url())
+  const context =  page.context();
   const [newPage] = await Promise.all([
     context.waitForEvent("page", { timeout: 3000 }).catch(() => null),
     clickByText(page, text),
@@ -229,27 +229,21 @@ const run = async (url: string, nlum: string, msg: string) => {
     await page.waitForLoadState("networkidle").catch(() => {});
   }
   console.log("Clicked", text);
+  console.log(targetPage.url())
 
-  const navigated = newPage !== null || targetPage.url() !== before_url;
-  if (!navigated) {
-    console.warn(
-      `Warning: clicked "${text}" but no navigation or new tab was detected — the page state is likely unchanged, and the following answer may be unreliable.`
-    );
-  }
-
-  const changed_html = truncate(await cleanHtml(targetPage));
-  console.log("Captured resulting page state");
-  console.log(targetPage.url());
+ // const changed_html = truncate(await cleanHtml(targetPage));
+  //console.log("Captured resulting page state");
+  //console.log(targetPage.url());
 
   //THIRD PART
 
-  console.log("Asking about page state...");
-  const result = await ask_state(changed_html, msg);
-  console.log(result);
+  //console.log("Asking about page state...");
+  //const result = await ask_state(changed_html, msg);
+  //console.log(result);
 
   await browser.close();
 };
 
 // url, natural-language query for what to click, question about the result
-const url = "https://gagan-9vo.pages.dev/";
-run(url, "The github link provided at the footer", "get me the Bio of his github");
+const url = "https://github.com/seika-afk/Pairleet";
+run(url, "click on the text/button/link named app", "get me the Bio of his github");
