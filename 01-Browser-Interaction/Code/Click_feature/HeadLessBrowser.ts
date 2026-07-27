@@ -126,7 +126,6 @@ const cleanHtml = async (page: import('playwright').Page): Promise<string> => {
     .trim();
 };
 
-// Hard safety-net so a single huge page can never blow the prompt-token budget again.
 const truncate = (text: string, maxChars = 20000): string => {
   if (text.length <= maxChars) return text;
   return text.slice(0, maxChars) + '\n...[truncated]';
@@ -204,10 +203,6 @@ const run = async (url: string, nlum: string, msg: string) => {
     }
   }
 
-  // FIX: send only the extracted clickable elements to the LLM, not the full
-  // raw page.content() — that was the entire GitHub DOM (scripts, styles,
-  // svgs, etc.), which blew past the OpenRouter free-tier prompt-token limit
-  // (70k-75k tokens vs. a ~30k cap), causing the 402 PaymentRequiredResponseError.
   const clickable_elements = truncate(await extractClickables(page));
 
   const text = await ask_llm(nlum, clickable_elements);
