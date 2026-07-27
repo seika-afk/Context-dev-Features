@@ -19,7 +19,7 @@ const startBrowser = async () => {
   return { browser, page };
 };
 
-const ask_llm = async (query: string, html_: string) => {
+const ask_llm = async (query: string, elements_: string) => {
   const completion = await client.chat.send({
     chatRequest: {
       model: "deepseek/deepseek-chat-v3.1",
@@ -30,11 +30,11 @@ const ask_llm = async (query: string, html_: string) => {
           content: `You are a strict HTML element locator. You do not chat, explain, or add commentary — you output exactly one line of text per response, nothing else.
 
         INPUT YOU WILL RECEIVE:
-        1. A block of raw HTML from a webpage. Elements inside the page footer are prefixed with "[footer] ".
+        1. A list of clickable elements extracted from a webpage, one per line, formatted like "<tag href="...">Label</tag>". Elements inside the page footer are prefixed with "[footer] ".
         2. A query describing a button/element the user wants to click (may include an ordinal, e.g. "2nd OK button", or a location like "in the footer").
 
         YOUR TASK:
-        Search the HTML for interactive elements (button, a, input[type=button/submit], or any element with role="button") whose visible text/label most closely matches the query's intent.
+        Search the list for the interactive element whose visible text/label most closely matches the query's intent.
 
         OUTPUT RULES (return exactly one of these, no quotes, no markdown, no punctuation added):
 
@@ -42,7 +42,7 @@ const ask_llm = async (query: string, html_: string) => {
            Return exactly: invalid
 
         2. EXACTLY ONE MATCHING ELEMENT:
-           Return the element's exact accessible text as it appears in the HTML (do NOT include the "[footer] " prefix — that is location metadata only).
+           Return the element's exact accessible text as it appears in the list (do NOT include the "[footer] " prefix — that is location metadata only).
            Example: OK
 
         3. MULTIPLE MATCHING ELEMENTS, but the user's query did NOT specify which one (no ordinal like "1st", "2nd", "third"):
@@ -53,11 +53,10 @@ const ask_llm = async (query: string, html_: string) => {
            Example, if there are 3 "OK" buttons and user asked for the 2nd one: OK 2
 
         MATCHING RULES:
-        - Match on visible/accessible text, trimmed of extra whitespace, case-insensitive for comparison purposes — but return the text exactly as it appears in the HTML (preserve original casing), excluding the "[footer] " prefix.
+        - Match on visible/accessible text, trimmed of extra whitespace, case-insensitive for comparison purposes — but return the text exactly as it appears in the list (preserve original casing), excluding the "[footer] " prefix.
         - If the query specifies a location (e.g. "in the footer", "at the bottom"), only consider elements prefixed with "[footer] ", and ignore elements elsewhere on the page even if their text matches better.
         - Prefer exact text matches over partial/fuzzy matches.
         - If no exact match exists, use the closest semantic match (e.g. query "confirm" matching a button labeled "Confirm Order" is acceptable only if nothing closer exists).
-        - Only consider elements that are clickable (buttons, links, or elements with role="button"/onclick handlers). Ignore plain text, labels, or disabled elements.
         - If the query itself contains an ordinal but there is in fact only ONE matching element, ignore the ordinal and just return the text (case 2) — do not append a number.
         - Never return explanations, reasoning, HTML tags, CSS selectors, or surrounding text — only the final string per the rules above.
 
@@ -66,13 +65,13 @@ const ask_llm = async (query: string, html_: string) => {
 
         So absolute precision and brevity are mandatory — a single wrong character or added word will break the automation.
 
-        Wait for the HTML and query in the next message before responding.
+        Wait for the element list and query in the next message before responding.
 
       ------------------
       QUERY :
 
         ` + query + `
-        And here is the HTML content ::` + html_,
+        And here is the list of clickable elements ::` + elements_,
         },
       ],
     }
@@ -125,6 +124,12 @@ const cleanHtml = async (page: import('playwright').Page): Promise<string> => {
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+};
+
+// Hard safety-net so a single huge page can never blow the prompt-token budget again.
+const truncate = (text: string, maxChars = 20000): string => {
+  if (text.length <= maxChars) return text;
+  return text.slice(0, maxChars) + '\n...[truncated]';
 };
 
 const ask_state = async (html: string, query: string) => {
@@ -199,9 +204,13 @@ const run = async (url: string, nlum: string, msg: string) => {
     }
   }
 
-  const html_content =  await page.content();
+  // FIX: send only the extracted clickable elements to the LLM, not the full
+  // raw page.content() — that was the entire GitHub DOM (scripts, styles,
+  // svgs, etc.), which blew past the OpenRouter free-tier prompt-token limit
+  // (70k-75k tokens vs. a ~30k cap), causing the 402 PaymentRequiredResponseError.
+  const clickable_elements = truncate(await extractClickables(page));
 
-  const text = await ask_llm(nlum, html_content);
+  const text = await ask_llm(nlum, clickable_elements);
   console.log("LLM found these text:", text);
 
   if (text === "invalid") {
@@ -213,8 +222,8 @@ const run = async (url: string, nlum: string, msg: string) => {
   console.log("Clicking...");
 
   const before_url = page.url();
-console.log(page.url())
-  const context =  page.context();
+  console.log(page.url());
+  const context = page.context();
   const [newPage] = await Promise.all([
     context.waitForEvent("page", { timeout: 3000 }).catch(() => null),
     clickByText(page, text),
@@ -229,17 +238,17 @@ console.log(page.url())
     await page.waitForLoadState("networkidle").catch(() => {});
   }
   console.log("Clicked", text);
-  console.log(targetPage.url())
+  console.log(targetPage.url());
 
- // const changed_html = truncate(await cleanHtml(targetPage));
-  //console.log("Captured resulting page state");
-  //console.log(targetPage.url());
+  // const changed_html = truncate(await cleanHtml(targetPage));
+  // console.log("Captured resulting page state");
+  // console.log(targetPage.url());
 
-  //THIRD PART
+  // THIRD PART
 
-  //console.log("Asking about page state...");
-  //const result = await ask_state(changed_html, msg);
-  //console.log(result);
+  // console.log("Asking about page state...");
+  // const result = await ask_state(changed_html, msg);
+  // console.log(result);
 
   await browser.close();
 };
