@@ -1,7 +1,8 @@
 import { chromium } from "playwright";
 import { OpenRouter } from '@openrouter/sdk';
-
+import fs from "fs/promises";
 import dotenv from "dotenv";
+
 dotenv.config();
 
 const client = new OpenRouter({
@@ -234,6 +235,11 @@ const run = async (url: string, nlum: string, msg: string) => {
   }
   console.log("Clicked", text);
   console.log(targetPage.url());
+
+  const html = await targetPage.content();
+  await fs.writeFile("output.txt", html);
+  console.log("saved Text")
+  console.log("END")
 
   // const changed_html = truncate(await cleanHtml(targetPage));
   // console.log("Captured resulting page state");
