@@ -2,9 +2,6 @@
 This repositery contains additional features for context.dev
 Mainly : 
 - Browser Interaction :
-  - Click buttons
-  - Fill forms
-- People Data
+  - Click buttons and Query on later pages
+  - Fill forms 
 
-Intended to be Finished by :
-28thJuly
