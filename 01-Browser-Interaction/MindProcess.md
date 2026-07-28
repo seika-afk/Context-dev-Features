@@ -41,3 +41,7 @@ and it will remain consistent with the later comparison rather than fitting in c
             - [x] rescrape and return changed dm
 
 Feature 1's functionality part is done, now i just gotta clean the code, use oops here and expose endpoint via express or smtg, to be able to use .
+Have divided the hugeass file into components , for mantaining it easily
+
+---
+### Feature 2 : Fill form
