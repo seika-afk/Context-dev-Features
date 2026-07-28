@@ -17,7 +17,7 @@ Started here https://playwright.dev/docs/api/class-playwright , tho for typescri
 Added A overall timeout policy of 10seconds
 and 3 trials before ughing out(later will return a status code will decide later)
 
-- [ ] Take input 
+- [x] Take input 
             - URL
             - Natural lang message where to click
 easy peasy just get the user's input
@@ -35,8 +35,9 @@ I think i will go with using llm , since even if it does integrated , its just p
 and it will remain consistent with the later comparison rather than fitting in context api.
 
 
-- [ ] Have the button Clicked
-- [ ] Handle Change
-            - [ ] Url change? -> Api
-            - [ ] rescrape and return changed dom
-- [ ] Return status code : Multiple choices et
+- [x] Have the button Clicked
+- [x] Handle Change
+            - [x] Url change? -> Api
+            - [x] rescrape and return changed dm
+
+Feature 1's functionality part is done, now i just gotta clean the code, use oops here and expose endpoint via express or smtg, to be able to use .
