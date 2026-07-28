@@ -62,7 +62,7 @@ const run = async (url: string, nlum: string, msg: string) => {
 
   await browser.close();
 };
-
+//////////////////////////////////////TEST
 run(
   "https://github.com/seika-afk/Pairleet",
   "click on the seika-afk author/username link at the top",
