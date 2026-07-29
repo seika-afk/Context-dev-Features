@@ -3,6 +3,8 @@
     "click": "tsx HeadLessBrowser.ts"
   },
   "dependencies": {
+    "@langchain/core": "^1.2.3",
+    "@langchain/langgraph": "^1.4.8",
     "@openrouter/sdk": "^1.0.17",
     "dotenv": "^17.4.2",
     "playwright": "^1.61.1",
