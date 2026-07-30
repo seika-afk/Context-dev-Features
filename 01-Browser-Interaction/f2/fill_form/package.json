@@ -1,5 +1,11 @@
 {
   "dependencies": {
-    "@langchain/langgraph": "^1.4.8"
+    "@langchain/core": "^1.2.3",
+    "@langchain/langgraph": "^1.4.8",
+    "@langchain/openai": "^1.5.5",
+    "@langchain/openrouter": "^0.4.5",
+    "dotenv": "^17.4.2",
+    "path": "^0.12.7",
+    "zod": "^4.4.3"
   }
 }

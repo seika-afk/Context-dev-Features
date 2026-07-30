@@ -1,8 +1,34 @@
 
 import { StateGraph, START, END } from "@langchain/langgraph";
+import { ChatOpenRouter } from "@langchain/openrouter";
+import { EXTRACT_LABELS_PROMPT } from "./prompts";
+import { z } from "zod";
+import dotenv from "dotenv"
+import path from "path"
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, ".env") });
+
+const labelSchema = z.object({
+  label: z.string().describe("Label from html content, we will later user that label to fill the detail ,so mantain accuracy"),
+  value:z.string().describe("Value take from FIELD DATA, be accurate")
+})
+
+const model = new ChatOpenRouter({
+  model: "deepseek/deepseek-chat-v3.1",
+  temperature: 0,
+  maxTokens: 100,
+});
+const sodel= model.withStructuredOutput(labelSchema, {
+  name: "Extract Labels and value",
+  method: "jsonSchema",
+});
+
 
 type BrowserState = {
-  query: string;
+  final_query: string;
+  field_data: string;
   html: string;
 
  //for llm1
@@ -13,24 +39,34 @@ type BrowserState = {
 
   tool?: string;
 
+  success?:boolean
+
 
 }
 
-async function run(query:string,html:string) {
+async function run(html:string,field_data:string,query:string) {
 
   //LLM 1
   async function ExtractLabelsLLM(state: BrowserState): Promise<Partial<BrowserState>> {
+    const  LABEL= await sodel.invoke([
+      {
+        role: "system",
+        content:EXTRACT_LABELS_PROMPT,
+      },
+      {
+        role: "user",
+        content:
+        html+"--------------------- FIELD DATA ->"+field_data
+,
+      },
+    ]);
+    console.log(LABEL);
 
-    return {
-      label: "Email", //lets imagine ,its set by ai
-      value: "abc@gmail.com",
-    };
+    return LABEL
   }
 
   //LLM2
   async function DecideToolLLM(state: BrowserState): Promise<Partial<BrowserState>> {
-    console.log(state.label);
-    console.log(state.value);
 
     // Another LLM call
 
@@ -57,7 +93,8 @@ async function run(query:string,html:string) {
 
   const graph = new StateGraph<BrowserState>({
     channels: {
-      query: {},
+      final_query: {},
+      field_data:{},
       html: {},
 
       label: {},
@@ -79,28 +116,30 @@ async function run(query:string,html:string) {
 
   const result = await app.invoke({
 
-    query: "Test Query",
-    html: `
-  <form>
-
-    <input
-      placeholder="Email"
-      type="email"
-    />
-
-    <input
-      placeholder="Password"
-      type="password"
-    />
-
-    <button>
-      Sign In
-    </button>
-
-  </form>`
+    final_query:query,
+    html: html,
+    field_data:field_data
   })
 
   console.log(result)
 }
+const html = `
+<form>
 
-run()
+  <input
+    placeholder="Email"
+    type="email"
+  />
+
+  <input
+    placeholder="Password"
+    type="password"
+  />
+
+  <button>
+    Sign In
+  </button>
+
+</form>
+`;
+run(html ,"Fill my email as aaf@gmail.com","")

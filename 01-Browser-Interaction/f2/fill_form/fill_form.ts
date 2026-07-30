@@ -19,11 +19,12 @@ const { browser, page } = await startBrowser();
      }
    }
  }
-  const html = page.content();
-  //call to function -> give (field_data,html)
+  const html = await page.content();
 
+  //call to function -> give (field_data,html)
+ run(html,field_data,query)
 }
 
 const url = ""
-//url ,field info, final query
+//url ,field info, final query related to page that comes after submitting
 run(url,)
