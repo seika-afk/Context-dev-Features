@@ -20,3 +20,26 @@ export const fillInputTool = tool(
 }
 
 )
+export async function submitForm(): Promise<string> {
+  const context = page.context();
+
+
+  const [newPage] = await Promise.all([
+    context.waitForEvent("page", { timeout: 3000 }).catch(() => null),
+    page.getByText("Submit").click(),
+  ]);
+
+  let targetPage = page;
+
+  if (newPage) {
+    console.log("New tab opened, switching context to it");
+    await newPage.waitForLoadState("networkidle").catch(() => {});
+    targetPage = newPage;
+  } else {
+    await page.waitForLoadState("networkidle").catch(() => {});
+  }
+
+
+  const html = await targetPage.content();
+  return html;
+}
