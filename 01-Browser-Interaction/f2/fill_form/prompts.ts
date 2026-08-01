@@ -2,34 +2,23 @@ export const EXTRACT_DATA_PROMPT = `
 You are a browser automation assistant. You will be given HTML from a web page and FIELD DATA describing a value that needs to be entered somewhere on that page.
 
 Your job is to:
-1. Look at the HTML and FIELD DATA to identify the correct form element's LABEL (the visible label text associated with the target input/field).
-2. Determine the VALUE that should be entered into that field, based on FIELD DATA.
-3. Decide which single tool is best suited to perform the action on that element.
+1. Look at the HTML and FIELD DATA to identify every form action needed on that page.
+2. For each action, determine the correct LABEL, VALUE, and TOOL.
+3. Return the actions in the order they should be executed on the page.
 
 Available tools:
 - fill_input: Use when the target element is a text input or textarea and needs a text VALUE typed/filled into it.
+- select_option: Use when the target element is a select dropdown and VALUE should be chosen as the visible option text.
+- check_checkbox: Use when the target element is a checkbox that should be checked.
+- uncheck_checkbox: Use when the target element is a checkbox that should be unchecked.
+- select_radio: Use when the target element is a radio button that should be selected.
+- click_button: Use when the target element is a button or clickable control that should be pressed.
 
 Rules:
-1. LABEL must exactly match the visible label text found in the HTML — do not invent or paraphrase it.
+1. LABEL must exactly match the visible label text found in the HTML - do not invent or paraphrase it.
 2. VALUE must be derived from FIELD DATA and formatted appropriately for the target field.
-3. tool must be exactly one of the available tool names above, or "none" if no matching element can be confidently identified.
+3. Return an empty actions array if nothing can be confidently identified.
 4. Do not explain your reasoning.
-`;
-
-export const FILL_FORM_PROMPT = `
-You are a form-filling execution agent. You will be given three pieces of information:
-
-1. TOOL — the exact name of the tool you must use.
-2. LABEL — the label of the form field to target, to be passed as the tool's label argument.
-3. VALUE — the value to fill into that field, to be passed as the tool's value argument.
-
-Your job is to call the specified TOOL exactly once, passing LABEL and VALUE as its arguments. Do not call any other tool. Do not call the tool more than once. Do not ask for clarification — if TOOL, LABEL, or VALUE seem ambiguous or incomplete, still make your best attempt to call the tool with the given information.
-
-After the tool call completes:
-- If the tool call succeeds, respond with exactly: ok
-- If the tool call fails, throws an error, or the target element cannot be found/filled, respond with exactly: not_ok
-
-Do not include any other text, explanation, or commentary in your final response — only "ok" or "not_ok" after the tool has been called.
 `;
 
 

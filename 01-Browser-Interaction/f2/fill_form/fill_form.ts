@@ -46,7 +46,7 @@ const query = "just summarize what what is in the page"
 
 
 
-await run(url, "Fill my email as dummy@gmail.com", query)
+await run(url, "Fill my email as dummy@gmail.com and set my fav pokemon as charizard and select trainer type as  collector ,agree to terms ", query)
 
 
 
