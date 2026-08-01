@@ -1,170 +1,222 @@
-
-import { StateGraph, START, END } from "@langchain/langgraph";
+import { END, START, StateGraph } from "@langchain/langgraph";
 import { ChatOpenRouter } from "@langchain/openrouter";
-import { EXTRACT_DATA_PROMPT, EXTRACT_LABELS_PROMPT, EXTRACT_TOOLS_PROMPT, FILL_FORM_PROMPT, FINAL_PROMPT } from "./prompts";
 import { z } from "zod";
-import dotenv from "dotenv"
-import path from "path"
+import dotenv from "dotenv";
+import path from "path";
 import { fileURLToPath } from "url";
-import { fillInputTool, submitForm } from "./tools";
+import {
+  checkCheckboxTool,
+  clickButtonTool,
+  fillInputTool,
+  selectOptionTool,
+  selectRadioTool,
+  submitForm,
+  uncheckCheckboxTool,
+} from "./tools";
+import { EXTRACT_DATA_PROMPT, FINAL_PROMPT } from "./prompts";
 
 export const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
 
-let ANSWER:string= ""
 export const model = new ChatOpenRouter({
   model: "deepseek/deepseek-chat-v3.1",
   temperature: 0,
-  maxTokens: 100,
+  maxTokens: 200,
 });
 
-export const labelSchema = z.object({
-  label: z.string().describe("Label from html content, we will later use that label to fill the detail, so maintain accuracy"),
-  value: z.string().describe("Value taken from FIELD DATA, be accurate"),
-  tool: z.string().describe(
-    "Name of the tool best suited to perform this action, e.g. 'fill_input'. Return 'none' if no matching element/tool can be confidently identified."
-  ),
+const supportedTools = [
+  "fill_input",
+  "select_option",
+  "check_checkbox",
+  "uncheck_checkbox",
+  "select_radio",
+  "click_button",
+] as const;
+
+const formActionSchema = z.object({
+  tool: z.enum(supportedTools),
+  label: z.string().describe("Visible label or control text"),
+  value: z.string().describe("Value to type or option text to select"),
 });
 
-
-const st_model= model.withStructuredOutput(labelSchema, {
-  name: "Extract Labels and value",
-  method: "jsonSchema",
+const extractSchema = z.object({
+  actions: z.array(formActionSchema).describe("Ordered list of form actions to run"),
+  error: z.string().optional().describe("Set when required fields are missing or incomplete"),
 });
-//const sodel = model.bindTools([fillInputTool])
+
+type FormAction = z.infer<typeof formActionSchema>;
 
 export type BrowserState = {
   final_query: string;
   field_data: string;
   html: string;
-
- //for llm1
-  label?: string;
-  value?: string;
-
-  //llm2
-
-  tool?: string;
-
-  success?: boolean
-
+  actions?: FormAction[];
+  error?: string;
+  success?: boolean;
   answer?: string;
+};
 
+const extractModel = model.withStructuredOutput(extractSchema, {
+  name: "Extract Form Actions",
+  method: "jsonSchema",
+});
 
+async function runAction(action: FormAction) {
+  switch (action.tool) {
+    case "fill_input":
+      return fillInputTool.func({
+        label: action.label,
+        value: action.value,
+      });
+    case "select_option":
+      return selectOptionTool.func({
+        label: action.label,
+        value: action.value,
+      });
+    case "check_checkbox":
+      return checkCheckboxTool.func({
+        label: action.label,
+        value: action.value,
+      });
+    case "uncheck_checkbox":
+      return uncheckCheckboxTool.func({
+        label: action.label,
+        value: action.value,
+      });
+    case "select_radio":
+      return selectRadioTool.func({
+        label: action.label,
+        value: action.value,
+      });
+    case "click_button":
+      return clickButtonTool.func({
+        label: action.label,
+        value: action.value,
+      });
+    default:
+      throw new Error(`Unsupported tool: ${action.tool}`);
+  }
 }
-export async function run_graph(html:string,field_data:string,query:string) {
 
-  //LLM 1+LLM2
-  async function ExtractDataLLM(state: BrowserState): Promise<Partial<BrowserState>> {
-    const response = await st_model.invoke([
-      {
-        role: "system",
-        content: EXTRACT_DATA_PROMPT,
-      },
-      {
-        role: "user",
-        content: html + "--------------------- FIELD DATA ->" + field_data,
-      },
-    ]);
-    console.log("-----LLM 1 : ")
-    console.log("----RESPONSE");
-    console.log(response);
-console.log("-------------")
+async function extractDataLLM(state: BrowserState): Promise<Partial<BrowserState>> {
+  const response = await extractModel.invoke([
+    {
+      role: "system",
+      content: EXTRACT_DATA_PROMPT,
+    },
+    {
+      role: "user",
+      content: `HTML CONTENT:\n${state.html}\n\nFIELD DATA:\n${state.field_data}`,
+    },
+  ]);
+
+  console.log("-----LLM extraction response-----");
+  console.log(response);
+  console.log("--------------------------------");
+
+  if (response.error) {
     return {
-      label: response.label,
-      value: response.value,
-      tool: response.tool,
+      actions: [],
+      error: response.error,
+      success: false,
+      answer: response.error,
     };
   }
-// LLM3
-// llm that recursively runs tools  to fill form
-  async function RunToolsRecursively(state: BrowserState): Promise<Partial<BrowserState>> {
-    console.log("------LLM2 : ")
-    const sodel = model.bindTools([fillInputTool])
-    const result = await sodel.invoke([
-      {
-        role: "system",
-        content: FILL_FORM_PROMPT,
-      },
-      {
-        role: "user",
-        content: `TOOL TO BE USED: ${state.tool}, LABEL: ${state.label}, VALUE: ${state.value}`,
-      },
-    ]);
 
-    const toolCall = result.tool_calls?.[0];
-    console.log("Using Tool")
-    if (!toolCall) {
-      console.log("error: model did not call a tool");
-      return { success: false };
-    }
+  return {
+    actions: response.actions ?? [],
+  };
+}
 
-    try {
-      if (toolCall.name === "fill_input") {
-        await fillInputTool.func(toolCall.args as { label: string; value: string });
-      } else {
-        console.log("error: unknown tool", toolCall.name);
-        return { success: false };
-      }
+async function executeActions(state: BrowserState): Promise<Partial<BrowserState>> {
+  if (state.error) {
+    console.log("-----EXTRACTION ERROR-----");
+    console.log(state.error);
+    console.log("--------------------------");
 
-    } catch (err) {
-      console.log("error", err);
-      return { success: false };
-    }
-    console.log("_------- SUBMITTING")
-    const html = await submitForm()
-    console.log("Form Submitted.")
-    console.log("Answering Query : ", state.final_query)
-    const res = await model.invoke([
-
-      {
-        role: "system",
-        content: FINAL_PROMPT,
-      },
-      {
-        role: "user",
-        content: "HTML CONTENT:  " + html + "--------------------- QUERY ->" + state.final_query,
-      },
-
-    ])
-    ANSWER= res.content
-  console.log("----Answered")
     return {
-      success: true,
-      answer: res.content as string,
-
-    }
+      success: false,
+      answer: state.error,
+    };
   }
-  ///////////////////////GRAPH
 
+  const actions = state.actions ?? [];
+
+  console.log("-----EXECUTING ACTIONS-----");
+  console.log(actions);
+
+  try {
+    for (const [index, action] of actions.entries()) {
+      console.log(`Running action ${index + 1}/${actions.length}:`, action.tool, action.label);
+      await runAction(action);
+    }
+  } catch (error) {
+    console.log("error while executing action", error);
+    return {
+      success: false,
+      answer: "not_ok",
+    };
+  }
+
+  const html =
+    actions.length > 0
+      ? await submitForm("submit").catch((error) => {
+          console.log("submit failed, falling back to current page html", error);
+          return state.html;
+        })
+      : state.html;
+
+  if (actions.length > 0) {
+    console.log("Form submitted.");
+  }
+
+  const res = await model.invoke([
+    {
+      role: "system",
+      content: FINAL_PROMPT,
+    },
+    {
+      role: "user",
+      content: `HTML CONTENT:\n${html}\n\nQUERY:\n${state.final_query}`,
+    },
+  ]);
+
+  const answer = typeof res.content === "string" ? res.content : JSON.stringify(res.content);
+  console.log("-----ANSWERED-----");
+
+  return {
+    success: true,
+    answer,
+  };
+}
+
+export async function run_graph(html: string, field_data: string, query: string) {
   const graph = new StateGraph<BrowserState>({
     channels: {
       final_query: {},
-      field_data:{},
+      field_data: {},
       html: {},
+      actions: {},
+      error: {},
+      success: {},
+      answer: {},
+    },
+  });
 
-      label: {},
-      value: {},
-      tool: {},
-    }
+  graph.addNode("extract_data", extractDataLLM);
+  graph.addNode("execute_actions", executeActions);
 
-  })
-console.log("--------STARTING GRAPH")
-  graph.addNode("extract_data", ExtractDataLLM)
-  graph.addNode("run_tools", RunToolsRecursively)
+  graph.addEdge(START, "extract_data");
+  graph.addEdge("extract_data", "execute_actions");
+  graph.addEdge("execute_actions", END);
 
-  graph.addEdge(START, "extract_data")
-  graph.addEdge("extract_data", "run_tools")
-  graph.addEdge("run_tools", END)
   const app = graph.compile();
 
+  const result = await app.invoke({
+    final_query: query,
+    html,
+    field_data,
+  });
 
-  const ress = await app.invoke({
-
-    final_query:query,
-    html: html,
-    field_data:field_data
-  })
-console.log("--------CLOSING GRAPH")
-  return ANSWER
-  }
+  return result.answer ?? "";
+}

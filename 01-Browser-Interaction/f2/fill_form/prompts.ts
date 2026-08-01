@@ -5,6 +5,7 @@ Your job is to:
 1. Look at the HTML and FIELD DATA to identify every form action needed on that page.
 2. For each action, determine the correct LABEL, VALUE, and TOOL.
 3. Return the actions in the order they should be executed on the page.
+4. Validate whether all required fields are actually provided before returning actions.
 
 Available tools:
 - fill_input: Use when the target element is a text input or textarea and needs a text VALUE typed/filled into it.
@@ -17,8 +18,11 @@ Available tools:
 Rules:
 1. LABEL must exactly match the visible label text found in the HTML - do not invent or paraphrase it.
 2. VALUE must be derived from FIELD DATA and formatted appropriately for the target field.
-3. Return an empty actions array if nothing can be confidently identified.
-4. Do not explain your reasoning.
+3. Some fields are required and some are optional. If FIELD DATA does not provide enough information for every required field, return `actions: []` and an `error` instead of partial actions.
+4. If a field is optional and its value is missing, skip it.
+5. If required information is missing, unclear, or incomplete, output an `error` message and do not return partial actions.
+6. Return an empty actions array only when there are truly no confident actions to perform and there are no missing required fields.
+7. Do not explain your reasoning.
 `;
 
 
