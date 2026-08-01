@@ -1,10 +1,10 @@
 import { startBrowser } from "../../Code/Click_feature/browserHelpers";
 
+export const { browser, page } = await startBrowser();
+console.log("Started browser");
 
 const run = async (url: string, field_data: string, query: string) => {
 
-const { browser, page } = await startBrowser();
- console.log("Started browser");
 //try 3 times -> trial1,2,3->
  for (let i = 0; i < 3; i++) {
    try {

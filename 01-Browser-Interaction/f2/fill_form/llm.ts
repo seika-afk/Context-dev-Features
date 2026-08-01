@@ -1,30 +1,36 @@
 
 import { StateGraph, START, END } from "@langchain/langgraph";
 import { ChatOpenRouter } from "@langchain/openrouter";
-import { EXTRACT_LABELS_PROMPT } from "./prompts";
+import { EXTRACT_DATA_PROMPT, EXTRACT_LABELS_PROMPT, EXTRACT_TOOLS_PROMPT } from "./prompts";
 import { z } from "zod";
 import dotenv from "dotenv"
 import path from "path"
 import { fileURLToPath } from "url";
+import { fillInputTool } from "./tools";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
-
-const labelSchema = z.object({
-  label: z.string().describe("Label from html content, we will later user that label to fill the detail ,so mantain accuracy"),
-  value:z.string().describe("Value take from FIELD DATA, be accurate")
-})
 
 const model = new ChatOpenRouter({
   model: "deepseek/deepseek-chat-v3.1",
   temperature: 0,
   maxTokens: 100,
 });
-const sodel= model.withStructuredOutput(labelSchema, {
+
+const labelSchema = z.object({
+  label: z.string().describe("Label from html content, we will later use that label to fill the detail, so maintain accuracy"),
+  value: z.string().describe("Value taken from FIELD DATA, be accurate"),
+  tool: z.string().describe(
+    "Name of the tool best suited to perform this action, e.g. 'fill_input'. Return 'none' if no matching element/tool can be confidently identified."
+  ),
+});
+
+
+const st_model= model.withStructuredOutput(labelSchema, {
   name: "Extract Labels and value",
   method: "jsonSchema",
 });
-
+//const sodel = model.bindTools([fillInputTool])
 
 type BrowserState = {
   final_query: string;
@@ -43,38 +49,30 @@ type BrowserState = {
 
 
 }
-
 async function run(html:string,field_data:string,query:string) {
 
-  //LLM 1
-  async function ExtractLabelsLLM(state: BrowserState): Promise<Partial<BrowserState>> {
-    const  LABEL= await sodel.invoke([
+  //LLM 1+LLM2
+  async function ExtractDataLLM(state: BrowserState): Promise<Partial<BrowserState>> {
+    const response = await st_model.invoke([
       {
         role: "system",
-        content:EXTRACT_LABELS_PROMPT,
+        content: EXTRACT_DATA_PROMPT,
       },
       {
         role: "user",
-        content:
-        html+"--------------------- FIELD DATA ->"+field_data
-,
+        content: html + "--------------------- FIELD DATA ->" + field_data,
       },
     ]);
-    console.log(LABEL);
-
-    return LABEL
-  }
-
-  //LLM2
-  async function DecideToolLLM(state: BrowserState): Promise<Partial<BrowserState>> {
-
-    // Another LLM call
+    console.log("RESPONSE");
+    console.log(response);
 
     return {
-      tool: "getByLabel",
+      label: response.label,
+      value: response.value,
+      tool: response.tool,
     };
   }
-
+const sodel =  model.bindTools([fillInputTool])
 // LLM3
 // llm that recursively runs tools  to fill form
 
@@ -104,12 +102,10 @@ async function run(html:string,field_data:string,query:string) {
 
   })
 
-  graph.addNode("labels_LLM", ExtractLabelsLLM)
-  graph.addNode("decide_LLM", DecideToolLLM)
+  graph.addNode("extract_data", ExtractDataLLM)
 
-  graph.addEdge(START, "labels_LLM")
-  graph.addEdge("labels_LLM", "decide_LLM")
-  graph.addEdge("decide_LLM", END)
+  graph.addEdge(START, "extract_data")
+  graph.addEdge("extract_data", END)
 
   const app = graph.compile();
 
