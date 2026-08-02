@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "click": "tsx HeadLessBrowser.ts"
+    "click": "tsx clickQuery.ts"
   },
   "dependencies": {
     "@langchain/core": "^1.2.3",
