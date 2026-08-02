@@ -1,7 +1,5 @@
 {
-  "scripts": {
-    "click": "tsx clickQuery.ts"
-  },
+  
   "dependencies": {
     "@langchain/core": "^1.2.3",
     "@langchain/langgraph": "^1.4.8",
